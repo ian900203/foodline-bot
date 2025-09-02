@@ -65,10 +65,20 @@ function estimateCalories(foodLabelRaw: string): CalorieEstimation {
 
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
+    console.log('streamToBuffer: 開始處理 stream');
     const chunks: Buffer[] = [];
-    stream.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('error', (err) => reject(err));
+    stream.on('data', (chunk) => {
+      console.log('streamToBuffer: 收到 chunk，大小:', chunk.length);
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    stream.on('end', () => {
+      console.log('streamToBuffer: stream 結束，總 chunks:', chunks.length);
+      resolve(Buffer.concat(chunks));
+    });
+    stream.on('error', (err) => {
+      console.error('streamToBuffer: stream 錯誤:', err);
+      reject(err);
+    });
   });
 }
 
@@ -136,6 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 															console.log('開始下載圖片內容，messageId:', event.message.id);
 							const contentStream: any = await client!.getMessageContent(event.message.id);
+							console.log('getMessageContent 返回:', typeof contentStream);
 							console.log('圖片內容下載成功，開始轉換為 Buffer');
 							const imageBuffer = await streamToBuffer(contentStream as NodeJS.ReadableStream);
 							console.log('Buffer 轉換完成，大小:', imageBuffer.length, 'bytes');
