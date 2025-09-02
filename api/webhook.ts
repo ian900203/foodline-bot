@@ -145,8 +145,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 							}
 
 															console.log('開始下載圖片內容，messageId:', event.message.id);
-							const contentStream: any = await client!.getMessageContent(event.message.id);
-							console.log('getMessageContent 返回:', typeof contentStream);
+							let contentStream: any;
+							try {
+								contentStream = await client!.getMessageContent(event.message.id);
+								console.log('getMessageContent 返回:', typeof contentStream);
+							} catch (downloadError) {
+								console.error('下載圖片內容失敗:', downloadError);
+								await client!.pushMessage(userId, {
+									type: 'text',
+									text: '抱歉，無法下載圖片內容，請稍後再試！'
+								});
+								return;
+							}
+							
 							console.log('圖片內容下載成功，開始轉換為 Buffer');
 							const imageBuffer = await streamToBuffer(contentStream as NodeJS.ReadableStream);
 							console.log('Buffer 轉換完成，大小:', imageBuffer.length, 'bytes');
