@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "functions": {
+    "api/webhook.ts": {
+      "maxDuration": 30
+    }
+  }
+}
+
