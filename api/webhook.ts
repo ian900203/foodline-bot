@@ -126,74 +126,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 							type: 'text',
 							text: `收到你的訊息：${event.message.text}`
 						});
-					} else if (event.message.type === 'image') {
-						await client!.replyMessage(event.replyToken, {
-							type: 'text',
-							text: '收到你的圖片！我正在分析食物內容...'
-						});
-
-											// 背景處理：下載圖片 → 辨識 → 估算 → 推播結果
-					console.log('開始背景處理圖片');
-					(async () => {
-						try {
-							console.log('進入背景處理 async 函數');
-															const userId: string | undefined = event.source?.userId;
-							console.log('取得 userId:', userId);
-							if (!userId) {
-								console.warn('無 userId，無法推播辨識結果');
-								return;
-							}
-
-															console.log('開始下載圖片內容，messageId:', event.message.id);
-							let imageBuffer: Buffer;
-							try {
-								// 改用直接 HTTP API 調用下載圖片
-								const response = await axios.get(`https://api-data.line.me/v2/bot/message/${event.message.id}/content`, {
-									headers: {
-										'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
-									},
-									responseType: 'arraybuffer'
-								});
-								console.log('HTTP API 下載成功，狀態碼:', response.status);
-								imageBuffer = Buffer.from(response.data);
-								console.log('圖片 Buffer 完成，大小:', imageBuffer.length, 'bytes');
-							} catch (downloadError) {
-								console.error('下載圖片內容失敗:', downloadError);
-								await client!.pushMessage(userId, {
-									type: 'text',
-									text: '抱歉，無法下載圖片內容，請稍後再試！'
-								});
-								return;
-							}
-
-															console.log('開始進行食物辨識');
-							const recognition = await recognizeFoodFromImage(imageBuffer);
-							console.log('食物辨識完成:', recognition);
-							if (!recognition) {
-									await client!.pushMessage(userId, {
-										type: 'text',
-										text: '抱歉，我暫時無法從圖片辨識食物內容，請換張清晰的餐點照再試一次喔！'
-									});
-									return;
-								}
-
-															const calorie = estimateCalories(recognition.label);
-							console.log('卡路里估算完成:', calorie);
-							const confidence = (recognition.score * 100).toFixed(1);
-							const resultText = `我辨識到：${calorie.foodName}（信心 ${confidence}%）\n估計熱量：約 ${calorie.estimatedCalories} ${calorie.unit}`;
-
-															console.log('準備推播結果訊息給 userId:', userId);
-							await client!.pushMessage(userId, {
-								type: 'text',
-								text: resultText
-							});
-							console.log('推播訊息成功！');
-													} catch (err) {
-							console.error('圖片處理流程失敗：', err);
-							console.error('錯誤詳細:', JSON.stringify(err, null, 2));
-						}
-						})();
-					}
+									} else if (event.message.type === 'image') {
+					// 簡化版：直接回覆結果，不做複雜處理
+					console.log('收到圖片，直接回覆測試結果');
+					await client!.replyMessage(event.replyToken, {
+						type: 'text',
+						text: '我辨識到：拉麵（信心 85.0%）\n估計熱量：約 400 kcal\n\n[測試模式 - 圖片處理功能開發中]'
+					});
+				}
 				}
 			}
 			return res.status(200).end();
