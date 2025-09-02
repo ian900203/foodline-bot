@@ -121,11 +121,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 							type: 'text',
 							text: '收到你的圖片！我正在分析食物內容...'
 						});
-
-						// 背景處理：下載圖片 → 辨識 → 估算 → 推播結果
-						(async () => {
-							try {
-								const userId: string | undefined = event.source?.userId;
+								// 背景處理：下載圖片 → 辨識 → 估算 → 推播結果
+console.log('開始背景處理圖片');
+(async () => {
+    try {
+        console.log('進入背景處理 async 函數');
+								const userId: string | undefined = event.source?.userId;console.log('取得 userId:', userId);
 								if (!userId) {
 									console.warn('無 userId，無法推播辨識結果');
 									return;
@@ -165,4 +166,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		}
 	});
 }
+
 
