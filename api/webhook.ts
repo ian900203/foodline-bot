@@ -121,22 +121,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 							type: 'text',
 							text: '收到你的圖片！我正在分析食物內容...'
 						});
-								// 背景處理：下載圖片 → 辨識 → 估算 → 推播結果
-console.log('開始背景處理圖片');
-(async () => {
-    try {
-        console.log('進入背景處理 async 函數');
-								const userId: string | undefined = event.source?.userId;console.log('取得 userId:', userId);
-								if (!userId) {
-									console.warn('無 userId，無法推播辨識結果');
-									return;
-								}
 
-								const contentStream: any = await client!.getMessageContent(event.message.id);
-								const imageBuffer = await streamToBuffer(contentStream as NodeJS.ReadableStream);
+											// 背景處理：下載圖片 → 辨識 → 估算 → 推播結果
+					console.log('開始背景處理圖片');
+					(async () => {
+						try {
+							console.log('進入背景處理 async 函數');
+															const userId: string | undefined = event.source?.userId;
+							console.log('取得 userId:', userId);
+							if (!userId) {
+								console.warn('無 userId，無法推播辨識結果');
+								return;
+							}
 
-								const recognition = await recognizeFoodFromImage(imageBuffer);
-								if (!recognition) {
+															console.log('開始下載圖片內容，messageId:', event.message.id);
+							const contentStream: any = await client!.getMessageContent(event.message.id);
+							console.log('圖片內容下載成功，開始轉換為 Buffer');
+							const imageBuffer = await streamToBuffer(contentStream as NodeJS.ReadableStream);
+							console.log('Buffer 轉換完成，大小:', imageBuffer.length, 'bytes');
+
+															console.log('開始進行食物辨識');
+							const recognition = await recognizeFoodFromImage(imageBuffer);
+							console.log('食物辨識完成:', recognition);
+							if (!recognition) {
 									await client!.pushMessage(userId, {
 										type: 'text',
 										text: '抱歉，我暫時無法從圖片辨識食物內容，請換張清晰的餐點照再試一次喔！'
@@ -144,17 +151,21 @@ console.log('開始背景處理圖片');
 									return;
 								}
 
-								const calorie = estimateCalories(recognition.label);
-								const confidence = (recognition.score * 100).toFixed(1);
-								const resultText = `我辨識到：${calorie.foodName}（信心 ${confidence}%）\n估計熱量：約 ${calorie.estimatedCalories} ${calorie.unit}`;
+															const calorie = estimateCalories(recognition.label);
+							console.log('卡路里估算完成:', calorie);
+							const confidence = (recognition.score * 100).toFixed(1);
+							const resultText = `我辨識到：${calorie.foodName}（信心 ${confidence}%）\n估計熱量：約 ${calorie.estimatedCalories} ${calorie.unit}`;
 
-								await client!.pushMessage(userId, {
-									type: 'text',
-									text: resultText
-								});
-							} catch (err) {
-								console.error('圖片處理流程失敗：', err);
-							}
+															console.log('準備推播結果訊息給 userId:', userId);
+							await client!.pushMessage(userId, {
+								type: 'text',
+								text: resultText
+							});
+							console.log('推播訊息成功！');
+													} catch (err) {
+							console.error('圖片處理流程失敗：', err);
+							console.error('錯誤詳細:', JSON.stringify(err, null, 2));
+						}
 						})();
 					}
 				}
@@ -166,5 +177,4 @@ console.log('開始背景處理圖片');
 		}
 	});
 }
-
 
