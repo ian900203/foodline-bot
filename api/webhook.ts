@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Client, middleware } from '@line/bot-sdk';
 import axios from 'axios';
+import { GoogleAuth } from 'google-auth-library';
 
 // 影像辨識與卡路里估算功能（內嵌到 serverless function）
 interface FoodRecognitionResult {
@@ -35,8 +36,21 @@ async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognit
     // 將圖片轉換為 base64
     const base64Image = imageBuffer.toString('base64');
     
+    // 解析服務帳戶 JSON
+    const serviceAccount = JSON.parse(process.env.GOOGLE_VISION_API_KEY || '{}');
+    
+    // 建立 Google Auth 客戶端
+    const auth = new GoogleAuth({
+      credentials: serviceAccount,
+      scopes: ['https://www.googleapis.com/auth/cloud-vision']
+    });
+    
+    // 取得認證 token
+    const client = await auth.getClient();
+    const token = await client.getAccessToken();
+    
     // 呼叫 Google Vision API
-    const response = await axios.post(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`, {
+    const response = await axios.post(`https://vision.googleapis.com/v1/images:annotate`, {
       requests: [
         {
           image: {
@@ -52,7 +66,8 @@ async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognit
       ]
     }, {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.token}`
       },
       timeout: 30000
     });
