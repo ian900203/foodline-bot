@@ -19,6 +19,15 @@ const FOOD_CALORIE_TABLE: Record<string, number> = {
   'hamburger': 500, 'pizza': 285, 'salad': 150, 'noodles': 250, 'sushi': 50
 };
 
+function getHuggingFaceModelName(): string {
+  const configuredModelName = process.env.HUGGINGFACE_MODEL?.trim();
+  if (configuredModelName && configuredModelName.length > 0) {
+    return configuredModelName;
+  }
+  // 改用食物專用模型，較適合餐點辨識
+  return 'nateraw/food';
+}
+
 async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognitionResult | null> {
   const apiKey = process.env.HUGGINGFACE_API_KEY;
   if (!apiKey) {
