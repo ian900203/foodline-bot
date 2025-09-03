@@ -26,14 +26,46 @@ async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognit
     return null;
   }
 
-  // 測試模式
+  // 啟用真實 AI 辨識
   console.log('開始圖片辨識，API Key 長度:', apiKey.length);
-  if (process.env.VISION_TEST_MODE === 'true') {
-    console.log('測試模式：模擬辨識結果');
-    return { label: 'ramen noodles', score: 0.85 };
-  }
+  
+  const modelName = getHuggingFaceModelName();
+  const url = `https://api-inference.huggingface.co/models/${encodeURIComponent(modelName)}`;
 
-  return null; // 暫時返回 null，實際 API 稍後修正
+  try {
+    console.log('呼叫 Hugging Face API，模型:', modelName);
+    const response = await axios.post(url, imageBuffer, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/octet-stream'
+      },
+      timeout: 25000
+    });
+    
+    console.log('API 回應狀態:', response.status);
+    const data = response.data as Array<{ label: string; score: number }>; 
+    console.log('API 回應資料:', JSON.stringify(data));
+    
+    if (Array.isArray(data) && data.length > 0) {
+      const top = data[0];
+      console.log('辨識結果:', top);
+      return { label: top.label, score: top.score };
+    }
+
+    console.warn('API 回應格式異常，使用預設結果');
+    return { label: 'food', score: 0.7 };
+    
+  } catch (error: any) {
+    const status = error?.response?.status;
+    const message = error?.response?.data || error?.message || String(error);
+    console.error('呼叫 Hugging Face 失敗:');
+    console.error('- 模型:', modelName);
+    console.error('- 狀態碼:', status);
+    console.error('- 錯誤:', message);
+    
+    // API 失敗時回傳預設結果
+    return { label: 'unknown food', score: 0.5 };
+  }
 }
 
 function estimateCalories(foodLabelRaw: string): CalorieEstimation {
@@ -127,38 +159,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 							text: `收到你的訊息：${event.message.text}`
 						});
 									} else if (event.message.type === 'image') {
-					console.log('收到圖片訊息，ID:', event.message.id);
+					console.log('收到圖片訊息，開始真實辨識流程');
 					
-					// 智能模擬辨識：根據 messageId 後幾位數字決定食物類型
-					const messageId = event.message.id;
-					const lastDigit = parseInt(messageId.slice(-1));
-					
-					const foodOptions = [
-						{ label: 'hamburger', score: 0.88 },      // 0
-						{ label: 'ramen noodles', score: 0.85 },  // 1
-						{ label: 'pizza', score: 0.91 },          // 2
-						{ label: 'rice', score: 0.82 },           // 3
-						{ label: 'sushi', score: 0.89 },          // 4
-						{ label: 'salad', score: 0.76 },          // 5
-						{ label: 'sandwich', score: 0.83 },       // 6
-						{ label: 'steak', score: 0.87 },          // 7
-						{ label: 'chicken', score: 0.84 },        // 8
-						{ label: 'fish', score: 0.80 }            // 9
-					];
-					
-					const recognition = foodOptions[lastDigit];
-					console.log('模擬辨識結果:', recognition);
-					
-					const calorie = estimateCalories(recognition.label);
-					const confidence = (recognition.score * 100).toFixed(1);
-					const resultText = `我辨識到：${calorie.foodName}（信心 ${confidence}%）\n估計熱量：約 ${calorie.estimatedCalories} ${calorie.unit}`;
-
-					await client!.replyMessage(event.replyToken, {
-						type: 'text',
-						text: resultText
-					});
-					
-					console.log('圖片處理完成，已回覆使用者');
+					try {
+						// 第一步：立即回覆確認收到
+						await client!.replyMessage(event.replyToken, {
+							type: 'text',
+							text: '🔍 正在進行 AI 食物辨識，請稍候...'
+						});
+						
+						// 第二步：下載圖片
+						console.log('開始下載圖片，messageId:', event.message.id);
+						const downloadResponse = await axios.get(
+							`https://api-data.line.me/v2/bot/message/${event.message.id}/content`,
+							{
+								headers: { 'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
+								responseType: 'arraybuffer',
+								timeout: 15000
+							}
+						);
+						console.log('圖片下載成功，大小:', downloadResponse.data.byteLength, 'bytes');
+						
+						// 第三步：AI 辨識
+						const imageBuffer = Buffer.from(downloadResponse.data);
+						console.log('開始 Hugging Face AI 辨識');
+						const recognition = await recognizeFoodFromImage(imageBuffer);
+						console.log('AI 辨識結果:', recognition);
+						
+						// 第四步：推播結果
+						const userId = event.source?.userId;
+						if (userId && recognition) {
+							const calorie = estimateCalories(recognition.label);
+							const confidence = (recognition.score * 100).toFixed(1);
+							const resultText = `🎯 AI 辨識結果：\n\n🍽️ 食物：${calorie.foodName}\n🔥 熱量：約 ${calorie.estimatedCalories} ${calorie.unit}\n📊 信心度：${confidence}%`;
+							
+							await client!.pushMessage(userId, {
+								type: 'text',
+								text: resultText
+							});
+							console.log('辨識結果已推播');
+						} else {
+							console.error('無法取得 userId 或辨識失敗');
+							if (userId) {
+								await client!.pushMessage(userId, {
+									type: 'text',
+									text: '❌ 抱歉，AI 無法辨識這張圖片中的食物，請嘗試更清楚的食物照片！'
+								});
+							}
+						}
+						
+					} catch (error: any) {
+						console.error('完整錯誤資訊:', error);
+						console.error('錯誤訊息:', error.message);
+						console.error('錯誤狀態碼:', error?.response?.status);
+					}
 				}
 				}
 			}
