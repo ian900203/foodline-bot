@@ -29,58 +29,68 @@ function getHuggingFaceModelName(): string {
 }
 
 async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognitionResult | null> {
-  console.log('開始 GPT 圖片辨識，圖片大小:', imageBuffer.length, 'bytes');
+  console.log('開始 Google Vision AI 辨識，圖片大小:', imageBuffer.length, 'bytes');
   
   try {
     // 將圖片轉換為 base64
     const base64Image = imageBuffer.toString('base64');
     
-    // 呼叫 OpenAI GPT-4 Vision API
-    const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4-vision-preview',
-      messages: [
+    // 呼叫 Google Vision API
+    const response = await axios.post(`https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`, {
+      requests: [
         {
-          role: 'user',
-          content: [
+          image: {
+            content: base64Image
+          },
+          features: [
             {
-              type: 'text',
-              text: '請辨識這張圖片中的食物，只回傳食物名稱（英文），例如：ramen noodles, hamburger, pizza, rice, sushi, salad, sandwich, steak, chicken, fish 等。如果沒有食物，請回傳 "no food"。'
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Image}`
-              }
+              type: 'LABEL_DETECTION',
+              maxResults: 5
             }
           ]
         }
-      ],
-      max_tokens: 50
+      ]
     }, {
       headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       },
       timeout: 30000
     });
     
-    const foodLabel = response.data.choices[0].message.content.trim().toLowerCase();
-    console.log('GPT 辨識結果:', foodLabel);
+    const labels = response.data.responses[0].labelAnnotations;
+    console.log('Google Vision 辨識結果:', labels);
     
-    // 如果 GPT 回傳 "no food"，使用預設結果
-    if (foodLabel === 'no food' || foodLabel.includes('no food')) {
-      return { label: 'unknown food', score: 0.5 };
+    // 尋找食物相關的標籤
+    const foodKeywords = [
+      'food', 'dish', 'meal', 'cuisine', 'restaurant', 'cooking',
+      'ramen', 'noodles', 'hamburger', 'pizza', 'rice', 'sushi',
+      'salad', 'sandwich', 'steak', 'chicken', 'fish', 'meat',
+      'vegetable', 'fruit', 'bread', 'pasta', 'soup'
+    ];
+    
+    let bestFoodLabel = 'unknown food';
+    let bestScore = 0.5;
+    
+    for (const label of labels) {
+      const labelText = label.description.toLowerCase();
+      const score = label.score;
+      
+      // 檢查是否為食物相關標籤
+      if (foodKeywords.some(keyword => labelText.includes(keyword))) {
+        if (score > bestScore) {
+          bestFoodLabel = labelText;
+          bestScore = score;
+        }
+      }
     }
     
-    // 計算信心度（基於回應的確定性）
-    const confidence = foodLabel.includes(' ') ? 0.85 : 0.92;
-    
-    return { label: foodLabel, score: confidence };
+    console.log('最終食物辨識結果:', { label: bestFoodLabel, score: bestScore });
+    return { label: bestFoodLabel, score: bestScore };
     
   } catch (error: any) {
-    console.error('GPT API 呼叫失敗:', error.message);
+    console.error('Google Vision API 呼叫失敗:', error.message);
     
-    // 如果 GPT 失敗，使用本地備用方案
+    // 如果 Google Vision 失敗，使用本地備用方案
     const imageSize = imageBuffer.length;
     const foodOptions = [
       { label: 'ramen noodles', score: 0.85 },
