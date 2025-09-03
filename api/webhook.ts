@@ -24,8 +24,8 @@ function getHuggingFaceModelName(): string {
   if (configuredModelName && configuredModelName.length > 0) {
     return configuredModelName;
   }
-  // 改用食物專用模型，較適合餐點辨識
-  return 'nateraw/food';
+  // 使用可靠的通用圖片分類模型
+  return 'microsoft/resnet-50';
 }
 
 async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognitionResult | null> {
