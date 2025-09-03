@@ -24,8 +24,8 @@ function getHuggingFaceModelName(): string {
   if (configuredModelName && configuredModelName.length > 0) {
     return configuredModelName;
   }
-  // 使用可靠的通用圖片分類模型
-  return 'microsoft/resnet-50';
+  // 使用確定存在的模型
+  return 'google/vit-base-patch16-224';
 }
 
 async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognitionResult | null> {
@@ -43,6 +43,9 @@ async function recognizeFoodFromImage(imageBuffer: Buffer): Promise<FoodRecognit
 
   try {
     console.log('呼叫 Hugging Face API，模型:', modelName);
+    console.log('API Key 前10位:', apiKey.substring(0, 10) + '...');
+    console.log('請求 URL:', url);
+    
     const response = await axios.post(url, imageBuffer, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
